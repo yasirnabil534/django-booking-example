@@ -6,6 +6,8 @@ from .views import (
     CustomerListView,
     ServiceListView,
     AppointmentListView,
+    SyncTriggerView,
+    SyncStatusView,
 )
 
 urlpatterns = [
@@ -15,4 +17,6 @@ urlpatterns = [
     path("<int:pk>/customers/",            CustomerListView.as_view(),         name="booking-system-customers"),
     path("<int:pk>/services/",             ServiceListView.as_view(),          name="booking-system-services"),
     path("<int:pk>/appointments/",         AppointmentListView.as_view(),      name="booking-system-appointments"),
+    path("<int:pk>/sync/",                 SyncTriggerView.as_view(),          name="booking-system-sync"),
+    path("<int:pk>/sync/status/",          SyncStatusView.as_view(),           name="booking-system-sync-status"),
 ]

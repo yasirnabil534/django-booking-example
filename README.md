@@ -121,6 +121,65 @@ python manage.py runserver
 
 ---
 
+## Running Background Services
+
+The sync pipeline uses **Celery** (task queue) + **Redis** (broker). Both are included in `docker-compose.yml` — no manual setup needed.
+
+### Option A — Docker (recommended)
+
+Spin up **everything** — Easy!Appointments, MySQL, Redis, Django, Celery worker, and Celery Beat — with a single command:
+
+```bash
+docker compose up -d
+```
+
+| Container | Role |
+|---|---|
+| `django-booking-example-redis-1` | Message broker |
+| `django-booking-example-web-1` | Django API at `http://localhost:8000` |
+| `django-booking-example-celery_worker-1` | Executes sync tasks |
+| `django-booking-example-celery_beat-1` | Schedules sync every 6 hours |
+
+> On first run, Docker builds the app image automatically from the `Dockerfile`.
+> Subsequent runs reuse the cached image (fast).
+
+To rebuild after adding new dependencies:
+```bash
+docker compose up -d --build
+```
+
+### Option B — Run locally (for development / debugging)
+
+If you prefer to run Django and Celery outside Docker (e.g. for faster iteration), start only the infrastructure via Docker and run the processes manually:
+
+```bash
+# 1. Start Redis + Easy!Appointments + MySQL only
+docker compose up -d redis easyappointments mysql
+
+# 2. Django dev server (separate terminal)
+python manage.py runserver
+
+# 3. Celery worker (separate terminal)
+celery -A config worker --loglevel=info
+
+# 4. Celery Beat (separate terminal)
+celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+```
+
+### Manual sync trigger
+
+Trigger a sync on demand via the API:
+
+```bash
+# Trigger full sync for booking system ID=1
+curl -X POST http://127.0.0.1:8000/api/booking-systems/1/sync/
+# → {"data": {"task_id": "..."}, "errors": [], "meta": null}
+
+# Check sync status
+curl http://127.0.0.1:8000/api/booking-systems/1/sync/status/
+```
+
+---
 
 ## API Endpoints
 
@@ -132,6 +191,8 @@ python manage.py runserver
 | `GET` | `/api/booking-systems/{id}/customers/` | List customers (paginated, `?search=`) |
 | `GET` | `/api/booking-systems/{id}/services/` | List services (paginated) |
 | `GET` | `/api/booking-systems/{id}/appointments/` | List appointments (paginated, `?start_date=`, `?end_date=`) |
+| `POST` | `/api/booking-systems/{id}/sync/` | Trigger a full background sync, returns `task_id` |
+| `GET` | `/api/booking-systems/{id}/sync/status/` | Sync status, `last_synced_at`, last error |
 
 ### Request & Response Format
 

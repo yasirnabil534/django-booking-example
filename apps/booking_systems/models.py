@@ -28,7 +28,8 @@ class BookingSystem(TimestampedModel):
         choices=SyncStatus.choices,
         default=SyncStatus.IDLE,
     )
-    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_synced_at  = models.DateTimeField(null=True, blank=True)
+    last_sync_error = models.TextField(blank=True, default="")
 
     class Meta:
         db_table = "booking_system"

@@ -376,3 +376,94 @@ class AppointmentListView(_BookingSystemSubListView):
         if end_date:
             qs = qs.filter(start_time__date__lte=end_date)
         return qs.select_related("provider", "customer", "service").order_by("start_time")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/booking-systems/{id}/sync/
+# ---------------------------------------------------------------------------
+
+@extend_schema(
+    summary="Trigger a full sync",
+    description=(
+        "Dispatches a Celery task to sync all data from the external booking system "
+        "(providers → customers → services → appointments). Returns the Celery task ID."
+    ),
+    responses={202: OpenApiTypes.OBJECT},
+    examples=[
+        OpenApiExample(
+            "Sync triggered",
+            summary="202 Accepted",
+            value={"data": {"task_id": "d3f1a2b4-1234-5678-abcd-ef1234567890"}, "errors": [], "meta": None},
+            response_only=True,
+            status_codes=["202"],
+        ),
+    ],
+)
+class SyncTriggerView(APIView):
+    """Trigger a full background sync for a booking system."""
+
+    def post(self, request, pk):
+        from .tasks import sync_booking_system_task
+        bs = _get_booking_system(pk)
+        result = sync_booking_system_task.delay(bs.id)
+        return Response(
+            {"data": {"task_id": result.id}, "errors": [], "meta": None},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/booking-systems/{id}/sync/status/
+# ---------------------------------------------------------------------------
+
+@extend_schema(
+    summary="Get sync status",
+    description="Returns the current sync status, last successful sync time, and any last error message.",
+    responses={200: OpenApiTypes.OBJECT},
+    examples=[
+        OpenApiExample(
+            "Sync status",
+            summary="200 OK — idle after successful sync",
+            value={
+                "data": {
+                    "sync_status": "idle",
+                    "last_synced_at": "2026-03-16T10:00:00Z",
+                    "last_sync_error": "",
+                },
+                "errors": [],
+                "meta": None,
+            },
+            response_only=True,
+            status_codes=["200"],
+        ),
+        OpenApiExample(
+            "Sync failed",
+            summary="200 OK — last sync failed",
+            value={
+                "data": {
+                    "sync_status": "failed",
+                    "last_synced_at": "2026-03-15T10:00:00Z",
+                    "last_sync_error": "AuthenticationError: Invalid credentials",
+                },
+                "errors": [],
+                "meta": None,
+            },
+            response_only=True,
+            status_codes=["200"],
+        ),
+    ],
+)
+class SyncStatusView(APIView):
+    """Return sync status, last sync time, and last error for a booking system."""
+
+    def get(self, request, pk):
+        bs = _get_booking_system(pk)
+        return Response({
+            "data": {
+                "sync_status":    bs.sync_status,
+                "last_synced_at": bs.last_synced_at,
+                "last_sync_error": bs.last_sync_error,
+            },
+            "errors": [],
+            "meta": None,
+        })
